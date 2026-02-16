@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.tomakehurst.wiremock.extension.Parameters;
 import com.github.tomakehurst.wiremock.extension.ServeEventListener;
 import com.github.tomakehurst.wiremock.http.ContentTypeHeader;
+import com.github.tomakehurst.wiremock.http.HttpHeader;
 import com.github.tomakehurst.wiremock.http.LoggedResponse;
 import com.github.tomakehurst.wiremock.stubbing.ServeEvent;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
@@ -14,8 +15,10 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 public class StructuredJsonLoggingListener implements ServeEventListener {
@@ -42,11 +45,16 @@ public class StructuredJsonLoggingListener implements ServeEventListener {
     // Constants for data sanitization
     private static final String BINARY_BODY_PLACEHOLDER = "<binary content not logged>";
     private static final String BASE64_PLACEHOLDER = "<base64_data_omitted>";
+    private static final String REDACTED_PLACEHOLDER = "<redacted>";
     // Minimum threshold to consider a string as a potential Base64. Avoids false positives.
     private static final int BASE64_MIN_LENGTH_THRESHOLD = 100;
     private static final String CONTENT_TYPE_MULTIPART = "multipart/form-data";
     private static final String CONTENT_TYPE_PDF = "application/pdf";
     private static final String CONTENT_TYPE_IMAGE = "image/";
+
+    // Set of sensitive headers to be redacted
+    private static final Set<String> SENSITIVE_HEADERS = Set.of("authorization", "cookie", "proxy-authorization",
+        "set-cookie", "www-authenticate");
 
     @Override
     public String getName() {
@@ -75,7 +83,7 @@ public class StructuredJsonLoggingListener implements ServeEventListener {
 
             ObjectNode requestHeaders = requestNode.putObject(HEADERS_FIELD);
             if (request.getHeaders() != null) {
-                request.getHeaders().all().forEach(h -> requestHeaders.put(h.key(), h.firstValue()));
+                request.getHeaders().all().forEach(h -> putFilteredHeader(h, requestHeaders));
             }
             requestNode.put(BODY_FIELD, getRequestBody(request));
 
@@ -85,7 +93,7 @@ public class StructuredJsonLoggingListener implements ServeEventListener {
 
             ObjectNode responseHeaders = responseNode.putObject(HEADERS_FIELD);
             if (response.getHeaders() != null) {
-                response.getHeaders().all().forEach(h -> responseHeaders.put(h.key(), h.firstValue()));
+                response.getHeaders().all().forEach(h -> putFilteredHeader(h, responseHeaders));
             }
             responseNode.put(BODY_FIELD, getSanitizedResponseBody(response));
 
@@ -163,5 +171,18 @@ public class StructuredJsonLoggingListener implements ServeEventListener {
         } catch (IllegalArgumentException e) {
             return false;
         }
+    }
+
+    private void putFilteredHeader(HttpHeader httpHeader, ObjectNode resultHeaders) {
+        String key = httpHeader.key();
+        String value;
+
+        if (SENSITIVE_HEADERS.contains(key.toLowerCase(Locale.ROOT))) {
+            value = REDACTED_PLACEHOLDER;
+        } else {
+            value = httpHeader.firstValue();
+        }
+
+        resultHeaders.put(key, value);
     }
 }

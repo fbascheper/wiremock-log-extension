@@ -142,4 +142,17 @@ class StructuredJsonLoggingListenerTest {
         assertThat(responseBody.get("data").asText()).isNotEqualTo("<base64_data_omitted>");
         assertThat(responseBody.get("data").asText()).isEqualTo(LONG_INVALID_BASE64_STRING);
     }
+
+    @Test
+    void givenPdfRequestWithAuthHeader_whenBeforeResponseSent_thenLogsRequestWithRedactedHeader() throws IOException {
+        // When
+        listener.beforeResponseSent(PDF_SERVE_WITH_AUTH_EVENT, null);
+
+        // Then
+        String jsonOutput = outContent.toString().trim();
+        JsonNode rootNode = objectMapper.readTree(jsonOutput);
+
+        assertThat(jsonOutput).contains("\"headers\":{\"Authorization\":\"<redacted>\",\"Content-Type\":\"application/pdf\"}");
+        assertThat(rootNode.get("request").get("body").asText()).isEqualTo("<binary content not logged>");
+    }
 }

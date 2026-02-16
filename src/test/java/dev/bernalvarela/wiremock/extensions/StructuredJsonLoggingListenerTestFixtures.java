@@ -7,8 +7,10 @@ import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import org.mockito.Mockito;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.Mockito.when;
@@ -31,16 +33,22 @@ public final class StructuredJsonLoggingListenerTestFixtures {
     static final String SHORT_VALID_BASE64_STRING = "dGVzdA=="; // "test"
 
     private static LoggedRequest createLoggedRequest(RequestMethod method, String url, String contentType, byte[] body) {
+        return createLoggedRequest(method, url, contentType, body, new HttpHeaders());
+    } 
+
+    private static LoggedRequest createLoggedRequest(RequestMethod method, String url, String contentType, byte[] body,
+            HttpHeaders requestHeaders) {
         Request requestMock = Mockito.mock(Request.class);
         when(requestMock.getMethod()).thenReturn(method);
         when(requestMock.getUrl()).thenReturn(url);
         when(requestMock.getAbsoluteUrl()).thenReturn("http://localhost:8080" + url);
         when(requestMock.getClientIp()).thenReturn("127.0.0.1");
+
+        List<HttpHeader> httpHeaderList = new ArrayList<>(requestHeaders.all());
         if (contentType != null) {
-            when(requestMock.getHeaders()).thenReturn(new HttpHeaders(new HttpHeader("Content-Type", contentType)));
-        } else {
-            when(requestMock.getHeaders()).thenReturn(new HttpHeaders());
+            httpHeaderList.add(new HttpHeader("Content-Type", contentType));
         }
+        when(requestMock.getHeaders()).thenReturn(new HttpHeaders(httpHeaderList.toArray(new HttpHeader[0])));
         when(requestMock.getBody()).thenReturn(body);
         return LoggedRequest.createFrom(requestMock);
     }
@@ -49,6 +57,8 @@ public final class StructuredJsonLoggingListenerTestFixtures {
     static final LoggedRequest TEXT_REQUEST = createLoggedRequest(RequestMethod.GET, "/test", "application/json", "{\"key\":\"value\"}".getBytes());
     static final LoggedRequest MULTIPART_REQUEST = createLoggedRequest(RequestMethod.POST, "/upload", "multipart/form-data", new byte[]{1, 2, 3});
     static final LoggedRequest PDF_REQUEST = createLoggedRequest(RequestMethod.POST, "/upload", "application/pdf", new byte[]{1, 2, 3});
+    static final LoggedRequest PDF_REQUEST_WITH_AUTH = createLoggedRequest(RequestMethod.POST, "/upload", "application/pdf", new byte[]{1, 2, 3},
+        new HttpHeaders(new HttpHeader("Authorization", "secret")));
     static final LoggedRequest REQUEST_WITH_NO_HEADERS = createLoggedRequest(RequestMethod.GET, "/test", null, new byte[0]);
 
     // --- RESPONSE FIXTURES ---
@@ -93,6 +103,7 @@ public final class StructuredJsonLoggingListenerTestFixtures {
     static final ServeEvent TEXT_SERVE_EVENT = createEvent(TEXT_REQUEST, TEXT_RESPONSE);
     static final ServeEvent MULTIPART_SERVE_EVENT = createEvent(MULTIPART_REQUEST, EMPTY_RESPONSE);
     static final ServeEvent PDF_SERVE_EVENT = createEvent(PDF_REQUEST, EMPTY_RESPONSE);
+    static final ServeEvent PDF_SERVE_WITH_AUTH_EVENT = createEvent(PDF_REQUEST_WITH_AUTH, EMPTY_RESPONSE);
     static final ServeEvent EMPTY_HEADERS_SERVE_EVENT = createEvent(REQUEST_WITH_NO_HEADERS, RESPONSE_WITH_EMPTY_HEADERS);
     static final ServeEvent TOP_LEVEL_BASE64_EVENT = createEvent(TEXT_REQUEST, RESPONSE_WITH_TOP_LEVEL_BASE64);
     static final ServeEvent NESTED_BASE64_EVENT = createEvent(TEXT_REQUEST, RESPONSE_WITH_NESTED_BASE64);
